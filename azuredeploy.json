@@ -1,0 +1,491 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "string",
+            "defaultValue": "intune-admin-task-monitor",
+            "metadata": {
+                "description": "Name of the Logic App"
+            }
+        },
+        "storageAccountName": {
+            "type": "string",
+            "defaultValue": "[concat('intunemonitor', uniqueString(resourceGroup().id))]",
+            "metadata": {
+                "description": "Name of the Storage Account (must be globally unique)"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources"
+            }
+        },
+        "teamsGroupId": {
+            "type": "string",
+            "defaultValue": "60183a35-dad6-4eb7-989d-93b58ac9eb16",
+            "metadata": {
+                "description": "Teams Group ID for notifications"
+            }
+        },
+        "teamsChannelId": {
+            "type": "string",
+            "defaultValue": "19:IqRWAoAUCuG-If9O-ciOEaVxMGSQ1wMu8185Uh4wxnA1@thread.tacv2",
+            "metadata": {
+                "description": "Teams Channel ID for notifications"
+            }
+        },
+        "recurrenceInterval": {
+            "type": "int",
+            "defaultValue": 5,
+            "metadata": {
+                "description": "How often to check for new tasks (in minutes)"
+            }
+        }
+    },
+    "variables": {
+        "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+        "teamsConnectionName": "teams",
+        "azureblobConnectionName": "azureblob",
+        "graphConnectionName": "microsoftgraph"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-01-01",
+            "name": "[parameters('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot",
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2023-01-01",
+            "name": "[concat(parameters('storageAccountName'), '/default')]",
+            "dependsOn": [
+                "[variables('storageAccountId')]"
+            ],
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2023-01-01",
+            "name": "[concat(parameters('storageAccountName'), '/default/intune-tasks')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('teamsConnectionName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "displayName": "Teams Connection",
+                "api": {
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azureblobConnectionName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[variables('storageAccountId')]"
+            ],
+            "properties": {
+                "displayName": "Azure Blob Storage Connection",
+                "api": {
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azureblob')]"
+                },
+                "parameterValues": {
+                    "accountName": "[parameters('storageAccountName')]",
+                    "accessKey": "[listKeys(variables('storageAccountId'), '2023-01-01').keys[0].value]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azureblobConnectionName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageAccountName'), 'default', 'intune-tasks')]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "teamsGroupId": {
+                            "defaultValue": "[parameters('teamsGroupId')]",
+                            "type": "String"
+                        },
+                        "teamsChannelId": {
+                            "defaultValue": "[parameters('teamsChannelId')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": "[parameters('recurrenceInterval')]"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_KnownTaskIds": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "KnownTaskIds",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Initialize_NewTasks": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "NewTasks",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_KnownTaskIds": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "Initialize_AllCurrentTaskIds": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AllCurrentTaskIds",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_NewTasks": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "Try_Get_Known_TaskIds": {
+                            "type": "Scope",
+                            "actions": {
+                                "Get_blob_content": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files/@{encodeURIComponent(encodeURIComponent('/intune-tasks/known-task-ids.json'))}/content",
+                                        "queries": {
+                                            "inferContentType": true
+                                        }
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Parse_Known_TaskIds": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_blob_content')",
+                                        "schema": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_blob_content": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Set_KnownTaskIds_from_Storage": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "KnownTaskIds",
+                                        "value": "@body('Parse_Known_TaskIds')"
+                                    },
+                                    "runAfter": {
+                                        "Parse_Known_TaskIds": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_AllCurrentTaskIds": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "HTTP_Get_Administrative_Tasks": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/beta/deviceManagement/administrativeTasks?$orderby=createdDateTime%20desc&$top=50",
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "audience": "https://graph.microsoft.com"
+                                }
+                            },
+                            "runAfter": {
+                                "Try_Get_Known_TaskIds": [
+                                    "SUCCEEDED",
+                                    "FAILED"
+                                ]
+                            }
+                        },
+                        "Parse_Tasks_Response": {
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_Get_Administrative_Tasks')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "value": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "displayName": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "createdDateTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "category": {
+                                                        "type": "string"
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_Get_Administrative_Tasks": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "For_each_Task": {
+                            "type": "Foreach",
+                            "foreach": "@body('Parse_Tasks_Response')?['value']",
+                            "actions": {
+                                "Append_TaskId_to_AllCurrentTaskIds": {
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "AllCurrentTaskIds",
+                                        "value": "@items('For_each_Task')?['id']"
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Check_if_Task_is_New": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "contains": [
+                                                        "@variables('KnownTaskIds')",
+                                                        "@items('For_each_Task')?['id']"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Append_to_NewTasks": {
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "NewTasks",
+                                                "value": "@items('For_each_Task')"
+                                            },
+                                            "runAfter": {}
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Append_TaskId_to_AllCurrentTaskIds": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Tasks_Response": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "Check_for_New_Tasks": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('NewTasks'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "For_each_New_Task": {
+                                    "type": "Foreach",
+                                    "foreach": "@variables('NewTasks')",
+                                    "actions": {
+                                        "Post_message_in_a_chat_or_channel": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "recipient": {
+                                                        "groupId": "@parameters('teamsGroupId')",
+                                                        "channelId": "@parameters('teamsChannelId')"
+                                                    },
+                                                    "messageBody": "<p><strong>New Intune Administrative Task</strong></p><p><strong>Name:</strong> @{items('For_each_New_Task')?['displayName']}</p><p><strong>Description:</strong> @{items('For_each_New_Task')?['description']}</p><p><strong>Category:</strong> @{items('For_each_New_Task')?['category']}</p><p><strong>Status:</strong> @{items('For_each_New_Task')?['status']}</p><p><strong>Created:</strong> @{items('For_each_New_Task')?['createdDateTime']}</p><p><strong>Task ID:</strong> @{items('For_each_New_Task')?['id']}</p>"
+                                                },
+                                                "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                            },
+                                            "runAfter": {}
+                                        }
+                                    },
+                                    "runAfter": {}
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_Task": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "Create_or_Update_blob": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@variables('AllCurrentTaskIds')",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                                "queries": {
+                                    "folderPath": "/intune-tasks",
+                                    "name": "known-task-ids.json",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            },
+                            "runAfter": {
+                                "Check_for_New_Tasks": [
+                                    "SUCCEEDED"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]",
+                                "connectionName": "[variables('teamsConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+                            },
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureblobConnectionName'))]",
+                                "connectionName": "[variables('azureblobConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azureblob')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "logicAppResourceId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+        },
+        "logicAppManagedIdentityPrincipalId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'full').identity.principalId]"
+        },
+        "storageAccountName": {
+            "type": "string",
+            "value": "[parameters('storageAccountName')]"
+        },
+        "requiredGraphPermissions": {
+            "type": "string",
+            "value": "DeviceManagementManagedDevices.Read.All - Required for reading administrative tasks from Intune"
+        }
+    }
+}

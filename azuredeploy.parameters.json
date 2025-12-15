@@ -1,0 +1,21 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "value": "intune-admin-task-monitor"
+        },
+        "storageAccountName": {
+            "value": "intunemonitortest01"
+        },
+        "teamsGroupId": {
+            "value": "60183a35-dad6-4eb7-989d-93b58ac9eb16"
+        },
+        "teamsChannelId": {
+            "value": "19:IqRWAoAUCuG-If9O-ciOEaVxMGSQ1wMu8185Uh4wxnA1@thread.tacv2"
+        },
+        "recurrenceInterval": {
+            "value": 5
+        }
+    }
+}
