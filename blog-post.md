@@ -17,134 +17,47 @@ The solution consists of the following components:
 - Azure subscription
 - Microsoft 365 license with Intune
 - Permissions to create Azure resources
-- Azure CLI installed (or access to Azure Cloud Shell)
 - Microsoft Teams team with a channel for notifications
 
-## Step 1: Clone the Repository
-
-First, clone the repository containing the ARM templates:
-
-```bash
-git clone https://github.com/yourrepo/AdminTaskNotification.git
-cd AdminTaskNotification
-```
-
-## Step 2: Get Teams Group ID and Channel ID
+## Step 1: Get Teams Group ID and Channel ID
 
 Before starting the deployment, you need the IDs of your Teams channel.
 
-### Option A: Via Microsoft Teams
+1. Open **Microsoft Teams**
+2. Right-click on the **Team** → "Get link to team"
+3. The URL contains: `groupId=<YOUR-GROUP-ID>`
+4. Right-click on the **Channel** → "Get link to channel"
+5. The URL contains the Channel ID (starts with `19:...`)
 
-1. Open Microsoft Teams
-2. Navigate to the channel where you want to receive notifications
-3. Click the three dots (...) next to the channel name
-4. Select **"Get link to channel"**
-5. The link contains the required IDs in this format:
-   ```
-   https://teams.microsoft.com/l/channel/19%3A...%40thread.tacv2/ChannelName?groupId=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX&tenantId=...
-   ```
-   - `groupId` = Teams Group ID
-   - The part after `/channel/` (URL-decoded) = Channel ID
-
-### Option B: Via Microsoft Graph Explorer
-
-1. Go to [Graph Explorer](https://developer.microsoft.com/graph/graph-explorer)
-2. Sign in and run the following query:
-   ```
-   GET https://graph.microsoft.com/v1.0/me/joinedTeams
-   ```
-3. Note the `id` of the desired team
-4. Then run (replace `{team-id}`):
-   ```
-   GET https://graph.microsoft.com/v1.0/teams/{team-id}/channels
-   ```
-5. Note the `id` of the desired channel
-
-## Step 3: Configure the Parameters File
-
-Open the file `azuredeploy.parameters.json` and adjust the values:
-
-```json
-{
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-        "logicAppName": {
-            "value": "intune-admin-task-monitor"
-        },
-        "storageAccountName": {
-            "value": "intunemonitor01"
-        },
-        "teamsGroupId": {
-            "value": "YOUR-TEAMS-GROUP-ID"
-        },
-        "teamsChannelId": {
-            "value": "19:YOUR-CHANNEL-ID@thread.tacv2"
-        },
-        "recurrenceInterval": {
-            "value": 5
-        }
-    }
-}
+Example URL:
 ```
+https://teams.microsoft.com/l/channel/19%3A...%40thread.tacv2/ChannelName?groupId=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX&tenantId=...
+```
+- `groupId` = Teams Group ID
+- The part after `/channel/` (URL-decoded) = Channel ID
+
+## Step 2: Deploy to Azure
+
+Click the button below to deploy the solution directly to your Azure subscription:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FJayRHa%2FAdminTaskNotification%2Fmain%2Fazuredeploy.json)
+
+Fill in the required parameters:
 
 | Parameter | Description |
 |-----------|-------------|
-| `logicAppName` | Name of the Logic App |
-| `storageAccountName` | Name of the Storage Account (must be globally unique, lowercase letters and numbers only) |
-| `teamsGroupId` | Your Teams Group ID |
-| `teamsChannelId` | Your Channel ID |
-| `recurrenceInterval` | Interval in minutes for checking new tasks |
+| **Logic App Name** | Name of the Logic App (default: `intune-admin-task-monitor`) |
+| **Teams Group ID** | Your Teams Group ID from Step 1 |
+| **Teams Channel ID** | Your Channel ID from Step 1 |
+| **Recurrence Interval** | Interval in minutes for checking new tasks (default: 5) |
 
-## Step 4: Deploy Azure Resources
+> **Note:** Storage Account Name and Location are automatically configured based on the Resource Group.
 
-### Using Azure CLI
+After clicking **"Review + create"** and then **"Create"**, wait for the deployment to complete.
 
-1. Sign in to Azure:
-   ```bash
-   az login
-   ```
+**Important**: Note the `logicAppManagedIdentityPrincipalId` from the deployment outputs - you'll need it in Step 4!
 
-2. Select the correct subscription:
-   ```bash
-   az account set --subscription "Your-Subscription-Name"
-   ```
-
-3. Create a Resource Group (if not already exists):
-   ```bash
-   az group create --name intune-monitoring --location westeurope
-   ```
-
-4. Start the deployment:
-   ```bash
-   az deployment group create \
-     --resource-group intune-monitoring \
-     --template-file azuredeploy.json \
-     --parameters azuredeploy.parameters.json
-   ```
-
-5. After successful deployment, you'll see output with important information:
-   ```json
-   {
-     "logicAppManagedIdentityPrincipalId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-     "logicAppResourceId": "/subscriptions/.../intune-admin-task-monitor",
-     "storageAccountName": "intunemonitor01",
-     "requiredGraphPermissions": "DeviceManagementManagedDevices.Read.All"
-   }
-   ```
-
-   **Important**: Note the `logicAppManagedIdentityPrincipalId` - you'll need it in the next step!
-
-### Using Azure Portal
-
-1. Go to the [Azure Portal](https://portal.azure.com)
-2. Search for **"Deploy a custom template"**
-3. Click **"Build your own template in the editor"**
-4. Copy the contents of `azuredeploy.json` into the editor
-5. Click **"Save"**
-6. Fill in the parameters and click **"Review + create"**
-
-## Step 5: Authorize the Teams Connection
+## Step 3: Authorize the Teams Connection
 
 After deployment, the Teams API connection must be manually authorized:
 
@@ -158,7 +71,7 @@ After deployment, the Teams API connection must be manually authorized:
 
 ![Teams Authorization](./images/teams-auth.png)
 
-## Step 6: Grant Graph API Permissions
+## Step 4: Grant Graph API Permissions
 
 The Logic App needs permissions to query Intune Administrative Tasks. This is done through the Managed Identity.
 
@@ -169,7 +82,7 @@ The Logic App needs permissions to query Intune Administrative Tasks. This is do
    Install-Module Microsoft.Graph -Scope CurrentUser
    ```
 
-2. Run the following script (replace the Principal ID with the value from Step 4):
+2. Run the following script (replace the Principal ID with the value from Step 2):
    ```powershell
    # Connect to Microsoft Graph
    Connect-MgGraph -Scopes "Application.Read.All","AppRoleAssignment.ReadWrite.All"
@@ -200,12 +113,12 @@ The Logic App needs permissions to query Intune Administrative Tasks. This is do
 You can verify that the permission was assigned correctly:
 
 1. Go to the [Azure Portal](https://portal.azure.com)
-2. Navigate to **Azure Active Directory** > **Enterprise Applications**
+2. Navigate to **Microsoft Entra ID** > **Enterprise Applications**
 3. Change the filter to **"Managed Identities"**
 4. Search for your Logic App
 5. Click **"Permissions"** - you should see `DeviceManagementManagedDevices.Read.All` listed
 
-## Step 7: Test the Logic App
+## Step 5: Test the Logic App
 
 1. Go to the Azure Portal
 2. Open your Logic App **"intune-admin-task-monitor"**
@@ -215,7 +128,7 @@ You can verify that the permission was assigned correctly:
 
 On the first run, all current Administrative Tasks are stored as "known". From the next run onwards, you'll only receive notifications for new tasks.
 
-## Step 8: Result
+## Step 6: Result
 
 When a new Administrative Task is created in Intune, you'll receive a notification in your Teams channel:
 
@@ -235,14 +148,14 @@ The message contains:
 
 **Problem**: The HTTP action receives an authentication error.
 
-**Solution**: Verify that the Graph API permissions were assigned correctly (Step 6).
+**Solution**: Verify that the Graph API permissions were assigned correctly (Step 4).
 
 ### No Teams Message is Sent
 
 **Problem**: The Logic App run is successful, but no message appears in Teams.
 
 **Solutions**:
-1. Verify that the Teams connection is authorized (Step 5)
+1. Verify that the Teams connection is authorized (Step 3)
 2. Verify that the Group ID and Channel ID are correct
 3. Ensure that the bot is allowed to post messages in the channel
 

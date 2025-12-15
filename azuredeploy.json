@@ -9,32 +9,16 @@
                 "description": "Name of the Logic App"
             }
         },
-        "storageAccountName": {
+                "teamsGroupId": {
             "type": "string",
-            "defaultValue": "[concat('intunemonitor', uniqueString(resourceGroup().id))]",
             "metadata": {
-                "description": "Name of the Storage Account (must be globally unique)"
-            }
-        },
-        "location": {
-            "type": "string",
-            "defaultValue": "[resourceGroup().location]",
-            "metadata": {
-                "description": "Location for all resources"
-            }
-        },
-        "teamsGroupId": {
-            "type": "string",
-            "defaultValue": "60183a35-dad6-4eb7-989d-93b58ac9eb16",
-            "metadata": {
-                "description": "Teams Group ID for notifications"
+                "description": "Teams Group ID - Find it in Teams: Click '...' on the Team > 'Get link to team' > copy the groupId parameter from the URL"
             }
         },
         "teamsChannelId": {
             "type": "string",
-            "defaultValue": "19:IqRWAoAUCuG-If9O-ciOEaVxMGSQ1wMu8185Uh4wxnA1@thread.tacv2",
             "metadata": {
-                "description": "Teams Channel ID for notifications"
+                "description": "Teams Channel ID - Find it in Teams: Click '...' on the Channel > 'Get link to channel' > copy the full channel ID (starts with 19:)"
             }
         },
         "recurrenceInterval": {
@@ -46,7 +30,9 @@
         }
     },
     "variables": {
-        "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+        "storageAccountName": "[concat('intmon', uniqueString(resourceGroup().id))]",
+        "location": "[resourceGroup().location]",
+        "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
         "teamsConnectionName": "teams",
         "azureblobConnectionName": "azureblob",
         "graphConnectionName": "microsoftgraph"
@@ -55,8 +41,8 @@
         {
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2023-01-01",
-            "name": "[parameters('storageAccountName')]",
-            "location": "[parameters('location')]",
+            "name": "[variables('storageAccountName')]",
+            "location": "[variables('location')]",
             "sku": {
                 "name": "Standard_LRS"
             },
@@ -70,7 +56,7 @@
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices",
             "apiVersion": "2023-01-01",
-            "name": "[concat(parameters('storageAccountName'), '/default')]",
+            "name": "[concat(variables('storageAccountName'), '/default')]",
             "dependsOn": [
                 "[variables('storageAccountId')]"
             ],
@@ -79,9 +65,9 @@
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
             "apiVersion": "2023-01-01",
-            "name": "[concat(parameters('storageAccountName'), '/default/intune-tasks')]",
+            "name": "[concat(variables('storageAccountName'), '/default/intune-tasks')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
             ],
             "properties": {
                 "publicAccess": "None"
@@ -91,11 +77,11 @@
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
             "name": "[variables('teamsConnectionName')]",
-            "location": "[parameters('location')]",
+            "location": "[variables('location')]",
             "properties": {
                 "displayName": "Teams Connection",
                 "api": {
-                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'teams')]"
                 }
             }
         },
@@ -103,17 +89,17 @@
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
             "name": "[variables('azureblobConnectionName')]",
-            "location": "[parameters('location')]",
+            "location": "[variables('location')]",
             "dependsOn": [
                 "[variables('storageAccountId')]"
             ],
             "properties": {
                 "displayName": "Azure Blob Storage Connection",
                 "api": {
-                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azureblob')]"
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'azureblob')]"
                 },
                 "parameterValues": {
-                    "accountName": "[parameters('storageAccountName')]",
+                    "accountName": "[variables('storageAccountName')]",
                     "accessKey": "[listKeys(variables('storageAccountId'), '2023-01-01').keys[0].value]"
                 }
             }
@@ -122,11 +108,11 @@
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2019-05-01",
             "name": "[parameters('logicAppName')]",
-            "location": "[parameters('location')]",
+            "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('azureblobConnectionName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageAccountName'), 'default', 'intune-tasks')]"
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'intune-tasks')]"
             ],
             "identity": {
                 "type": "SystemAssigned"
@@ -457,12 +443,12 @@
                             "teams": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]",
                                 "connectionName": "[variables('teamsConnectionName')]",
-                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'teams')]"
                             },
                             "azureblob": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureblobConnectionName'))]",
                                 "connectionName": "[variables('azureblobConnectionName')]",
-                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azureblob')]"
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'azureblob')]"
                             }
                         }
                     }
@@ -481,7 +467,7 @@
         },
         "storageAccountName": {
             "type": "string",
-            "value": "[parameters('storageAccountName')]"
+            "value": "[variables('storageAccountName')]"
         },
         "requiredGraphPermissions": {
             "type": "string",
