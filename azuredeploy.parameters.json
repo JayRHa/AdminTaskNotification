@@ -5,17 +5,17 @@
         "logicAppName": {
             "value": "intune-admin-task-monitor"
         },
-        "storageAccountName": {
-            "value": "intunemonitortest01"
-        },
         "teamsGroupId": {
-            "value": "60183a35-dad6-4eb7-989d-93b58ac9eb16"
+            "value": "YOUR-TEAMS-GROUP-ID"
         },
         "teamsChannelId": {
-            "value": "19:IqRWAoAUCuG-If9O-ciOEaVxMGSQ1wMu8185Uh4wxnA1@thread.tacv2"
+            "value": "YOUR-TEAMS-CHANNEL-ID"
         },
         "recurrenceInterval": {
             "value": 5
+        },
+        "appDisplayName": {
+            "value": "Intune Admin Task Monitor"
         }
     }
 }

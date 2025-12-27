@@ -9,7 +9,7 @@
                 "description": "Name of the Logic App"
             }
         },
-                "teamsGroupId": {
+        "teamsGroupId": {
             "type": "string",
             "metadata": {
                 "description": "Teams Group ID - Find it in Teams: Click '...' on the Team > 'Get link to team' > copy the groupId parameter from the URL"
@@ -27,17 +27,35 @@
             "metadata": {
                 "description": "How often to check for new tasks (in minutes)"
             }
+        },
+        "appDisplayName": {
+            "type": "string",
+            "defaultValue": "Intune Admin Task Monitor",
+            "metadata": {
+                "description": "Display name for the App Registration"
+            }
         }
     },
     "variables": {
         "storageAccountName": "[concat('intmon', uniqueString(resourceGroup().id))]",
+        "keyVaultName": "[concat('kv-intmon-', uniqueString(resourceGroup().id))]",
         "location": "[resourceGroup().location]",
+        "tenantId": "[subscription().tenantId]",
         "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
         "teamsConnectionName": "teams",
         "azureblobConnectionName": "azureblob",
-        "graphConnectionName": "microsoftgraph"
+        "keyvaultConnectionName": "keyvault",
+        "callbackLogicAppName": "[concat(parameters('logicAppName'), '-oauth-callback')]",
+        "createAppScriptName": "createAppRegistration",
+        "userAssignedIdentityName": "[concat('intmon-deployer-', uniqueString(resourceGroup().id))]"
     },
     "resources": [
+        {
+            "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+            "apiVersion": "2023-01-31",
+            "name": "[variables('userAssignedIdentityName')]",
+            "location": "[variables('location')]"
+        },
         {
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2023-01-01",
@@ -74,6 +92,22 @@
             }
         },
         {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2023-07-01",
+            "name": "[variables('keyVaultName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                },
+                "tenantId": "[variables('tenantId')]",
+                "enableRbacAuthorization": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 7
+            }
+        },
+        {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
             "name": "[variables('teamsConnectionName')]",
@@ -105,6 +139,333 @@
             }
         },
         {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvaultConnectionName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ],
+            "properties": {
+                "displayName": "Key Vault Connection",
+                "api": {
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'keyvault')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[variables('keyVaultName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[variables('callbackLogicAppName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "tenantId": {
+                            "defaultValue": "[variables('tenantId')]",
+                            "type": "String"
+                        },
+                        "clientId": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "clientSecret": {
+                            "defaultValue": "",
+                            "type": "SecureString"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_for_Auth_Code": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerOutputs()['queries']?['code']",
+                                                null
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Get_Callback_URL": {
+                                    "type": "Compose",
+                                    "inputs": "@split(triggerOutputs()['queries']['state'], '|')[1]",
+                                    "runAfter": {}
+                                },
+                                "Exchange_Code_for_Token": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "POST",
+                                        "uri": "https://login.microsoftonline.com/@{parameters('tenantId')}/oauth2/v2.0/token",
+                                        "headers": {
+                                            "Content-Type": "application/x-www-form-urlencoded"
+                                        },
+                                        "body": "grant_type=authorization_code&client_id=@{parameters('clientId')}&client_secret=@{parameters('clientSecret')}&code=@{triggerOutputs()['queries']['code']}&redirect_uri=@{outputs('Get_Callback_URL')}&scope=https://graph.microsoft.com/DeviceManagementManagedDevices.Read.All offline_access"
+                                    },
+                                    "runAfter": {
+                                        "Get_Callback_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Parse_Token_Response": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Exchange_Code_for_Token')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "access_token": {
+                                                    "type": "string"
+                                                },
+                                                "refresh_token": {
+                                                    "type": "string"
+                                                },
+                                                "expires_in": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Exchange_Code_for_Token": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Store_Refresh_Token": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/secrets/@{encodeURIComponent('intune-refresh-token')}",
+                                        "body": {
+                                            "value": "@{body('Parse_Token_Response')?['refresh_token']}"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_Token_Response": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Success_Response": {
+                                    "type": "Response",
+                                    "inputs": {
+                                        "statusCode": 200,
+                                        "headers": {
+                                            "Content-Type": "text/html"
+                                        },
+                                        "body": "<!DOCTYPE html><html><head><title>Authentication Successful</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}.container{background:white;padding:40px;border-radius:10px;text-align:center;box-shadow:0 4px 6px rgba(0,0,0,0.1)}.success-icon{font-size:64px;margin-bottom:20px}h1{color:#333;margin-bottom:10px}p{color:#666}</style></head><body><div class=\"container\"><div class=\"success-icon\">✅</div><h1>Authentication Successful!</h1><p>You can close this window now.</p><p>The Intune Task Monitor is now authenticated and will start monitoring.</p></div></body></html>"
+                                    },
+                                    "runAfter": {
+                                        "Store_Refresh_Token": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Error_Response": {
+                                        "type": "Response",
+                                        "inputs": {
+                                            "statusCode": 400,
+                                            "headers": {
+                                                "Content-Type": "text/html"
+                                            },
+                                            "body": "<!DOCTYPE html><html><head><title>Authentication Failed</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#f44336}.container{background:white;padding:40px;border-radius:10px;text-align:center}.error-icon{font-size:64px;margin-bottom:20px}h1{color:#333}p{color:#666}</style></head><body><div class=\"container\"><div class=\"error-icon\">❌</div><h1>Authentication Failed</h1><p>No authorization code received. Please try again.</p></div></body></html>"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {}
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                                "connectionName": "[variables('keyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), variables('callbackLogicAppName'), 'KeyVaultSecretsOfficer')]",
+            "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', variables('callbackLogicAppName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', variables('callbackLogicAppName')), '2019-05-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deploymentScripts",
+            "apiVersion": "2020-10-01",
+            "name": "[variables('createAppScriptName')]",
+            "location": "[variables('location')]",
+            "kind": "AzureCLI",
+            "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName'))]": {}
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', variables('callbackLogicAppName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ],
+            "properties": {
+                "azCliVersion": "2.52.0",
+                "timeout": "PT10M",
+                "retentionInterval": "PT1H",
+                "environmentVariables": [
+                    {
+                        "name": "APP_DISPLAY_NAME",
+                        "value": "[parameters('appDisplayName')]"
+                    },
+                    {
+                        "name": "REDIRECT_URI",
+                        "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', variables('callbackLogicAppName'), 'manual'), '2019-05-01').value]"
+                    },
+                    {
+                        "name": "KEY_VAULT_NAME",
+                        "value": "[variables('keyVaultName')]"
+                    }
+                ],
+                "scriptContent": "
+#!/bin/bash
+set -e
+
+# Login with managed identity
+az login --identity
+
+# Check if app already exists
+EXISTING_APP=$(az ad app list --display-name \"$APP_DISPLAY_NAME\" --query \"[0].appId\" -o tsv 2>/dev/null || echo \"\")
+
+if [ -n \"$EXISTING_APP\" ] && [ \"$EXISTING_APP\" != \"None\" ]; then
+    echo \"App already exists with ID: $EXISTING_APP\"
+    APP_ID=$EXISTING_APP
+
+    # Update redirect URI
+    az ad app update --id $APP_ID --web-redirect-uris \"$REDIRECT_URI\"
+
+    # Create new secret
+    SECRET_RESULT=$(az ad app credential reset --id $APP_ID --display-name \"intune-monitor-secret\" --years 2 --query password -o tsv)
+else
+    # Create App Registration with required permissions
+    APP_RESULT=$(az ad app create \\
+        --display-name \"$APP_DISPLAY_NAME\" \\
+        --web-redirect-uris \"$REDIRECT_URI\" \\
+        --required-resource-accesses '[{
+            \"resourceAppId\": \"00000003-0000-0000-c000-000000000000\",
+            \"resourceAccess\": [
+                {\"id\": \"314874da-47d6-4978-88dc-cf0d37f0571a\", \"type\": \"Scope\"},
+                {\"id\": \"7427e0e9-2fba-42fe-b0c0-848c9e6a8182\", \"type\": \"Scope\"}
+            ]
+        }]' \\
+        --query appId -o tsv)
+
+    APP_ID=$APP_RESULT
+    echo \"Created App Registration with ID: $APP_ID\"
+
+    # Create client secret
+    SECRET_RESULT=$(az ad app credential reset --id $APP_ID --display-name \"intune-monitor-secret\" --years 2 --query password -o tsv)
+
+    # Create service principal
+    az ad sp create --id $APP_ID || true
+fi
+
+# Get tenant ID
+TENANT_ID=$(az account show --query tenantId -o tsv)
+
+# Store secrets in Key Vault
+az keyvault secret set --vault-name $KEY_VAULT_NAME --name \"app-client-id\" --value \"$APP_ID\"
+az keyvault secret set --vault-name $KEY_VAULT_NAME --name \"app-client-secret\" --value \"$SECRET_RESULT\"
+
+# Output for ARM template
+echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" > $AZ_SCRIPTS_OUTPUT_PATH
+"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), variables('userAssignedIdentityName'), 'KeyVaultSecretsOfficer')]",
+            "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName')), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2019-05-01",
             "name": "[parameters('logicAppName')]",
@@ -112,7 +473,10 @@
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('azureblobConnectionName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'intune-tasks')]"
+                "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'intune-tasks')]",
+                "[resourceId('Microsoft.Logic/workflows', variables('callbackLogicAppName'))]",
+                "[resourceId('Microsoft.Resources/deploymentScripts', variables('createAppScriptName'))]"
             ],
             "identity": {
                 "type": "SystemAssigned"
@@ -134,6 +498,14 @@
                         "teamsChannelId": {
                             "defaultValue": "[parameters('teamsChannelId')]",
                             "type": "String"
+                        },
+                        "tenantId": {
+                            "defaultValue": "[variables('tenantId')]",
+                            "type": "String"
+                        },
+                        "callbackUrl": {
+                            "defaultValue": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', variables('callbackLogicAppName'), 'manual'), '2019-05-01').value]",
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -146,7 +518,7 @@
                         }
                     },
                     "actions": {
-                        "Initialize_KnownTaskIds": {
+                        "Initialize_Variables": {
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -154,42 +526,279 @@
                                         "name": "KnownTaskIds",
                                         "type": "array",
                                         "value": []
+                                    },
+                                    {
+                                        "name": "NewTasks",
+                                        "type": "array",
+                                        "value": []
+                                    },
+                                    {
+                                        "name": "AllCurrentTaskIds",
+                                        "type": "array",
+                                        "value": []
+                                    },
+                                    {
+                                        "name": "BlobExists",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "AccessToken",
+                                        "type": "string",
+                                        "value": ""
+                                    },
+                                    {
+                                        "name": "IsAuthenticated",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "ClientId",
+                                        "type": "string",
+                                        "value": ""
+                                    },
+                                    {
+                                        "name": "ClientSecret",
+                                        "type": "string",
+                                        "value": ""
                                     }
                                 ]
                             },
                             "runAfter": {}
                         },
-                        "Initialize_NewTasks": {
-                            "type": "InitializeVariable",
+                        "Get_Client_Id": {
+                            "type": "ApiConnection",
                             "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "NewTasks",
-                                        "type": "array",
-                                        "value": []
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
                                     }
-                                ]
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('app-client-id')}/value"
                             },
                             "runAfter": {
-                                "Initialize_KnownTaskIds": [
-                                    "SUCCEEDED"
+                                "Initialize_Variables": [
+                                    "Succeeded"
                                 ]
                             }
                         },
-                        "Initialize_AllCurrentTaskIds": {
-                            "type": "InitializeVariable",
+                        "Get_Client_Secret": {
+                            "type": "ApiConnection",
                             "inputs": {
-                                "variables": [
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('app-client-secret')}/value"
+                            },
+                            "runAfter": {
+                                "Get_Client_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Set_ClientId": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "ClientId",
+                                "value": "@body('Get_Client_Id')?['value']"
+                            },
+                            "runAfter": {
+                                "Get_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Set_ClientSecret": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "ClientSecret",
+                                "value": "@body('Get_Client_Secret')?['value']"
+                            },
+                            "runAfter": {
+                                "Set_ClientId": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Try_Get_Refresh_Token": {
+                            "type": "Scope",
+                            "actions": {
+                                "Get_Refresh_Token": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/secrets/@{encodeURIComponent('intune-refresh-token')}/value"
+                                    },
+                                    "runAfter": {}
+                                },
+                                "Get_Access_Token": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "POST",
+                                        "uri": "https://login.microsoftonline.com/@{parameters('tenantId')}/oauth2/v2.0/token",
+                                        "headers": {
+                                            "Content-Type": "application/x-www-form-urlencoded"
+                                        },
+                                        "body": "grant_type=refresh_token&client_id=@{variables('ClientId')}&client_secret=@{variables('ClientSecret')}&refresh_token=@{body('Get_Refresh_Token')?['value']}&scope=https://graph.microsoft.com/DeviceManagementManagedDevices.Read.All offline_access"
+                                    },
+                                    "runAfter": {
+                                        "Get_Refresh_Token": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Parse_Token_Response": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_Access_Token')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "access_token": {
+                                                    "type": "string"
+                                                },
+                                                "refresh_token": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_Access_Token": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Update_Refresh_Token": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/secrets/@{encodeURIComponent('intune-refresh-token')}",
+                                        "body": {
+                                            "value": "@{body('Parse_Token_Response')?['refresh_token']}"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_Token_Response": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Set_AccessToken": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "AccessToken",
+                                        "value": "@{body('Parse_Token_Response')?['access_token']}"
+                                    },
+                                    "runAfter": {
+                                        "Update_Refresh_Token": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Set_IsAuthenticated_True": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "IsAuthenticated",
+                                        "value": true
+                                    },
+                                    "runAfter": {
+                                        "Set_AccessToken": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Set_ClientSecret": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Check_Authentication": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
                                     {
-                                        "name": "AllCurrentTaskIds",
-                                        "type": "array",
-                                        "value": []
+                                        "equals": [
+                                            "@variables('IsAuthenticated')",
+                                            false
+                                        ]
                                     }
                                 ]
                             },
+                            "actions": {
+                                "Post_Login_Card": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "recipient": {
+                                                "groupId": "@parameters('teamsGroupId')",
+                                                "channelId": "@parameters('teamsChannelId')"
+                                            },
+                                            "messageBody": "<p><strong>🔐 Authentication Required</strong></p><p>The Intune Task Monitor needs to be authenticated to access administrative tasks.</p><p><a href=\"https://login.microsoftonline.com/@{parameters('tenantId')}/oauth2/v2.0/authorize?client_id=@{variables('ClientId')}&response_type=code&redirect_uri=@{encodeURIComponent(parameters('callbackUrl'))}&response_mode=query&scope=https://graph.microsoft.com/DeviceManagementManagedDevices.Read.All%20offline_access&state=intune-monitor|@{parameters('callbackUrl')}\">👉 Click here to login</a></p><p><em>After login, the monitor will automatically start checking for new tasks.</em></p>"
+                                        },
+                                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                    }
+                                },
+                                "Terminate_Auth_Required": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Cancelled",
+                                        "runError": {
+                                            "code": "AuthenticationRequired",
+                                            "message": "Login card posted to Teams. Waiting for user authentication."
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Post_Login_Card": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
                             "runAfter": {
-                                "Initialize_NewTasks": [
-                                    "SUCCEEDED"
+                                "Try_Get_Refresh_Token": [
+                                    "Succeeded",
+                                    "Failed"
                                 ]
                             }
                         },
@@ -209,8 +818,7 @@
                                         "queries": {
                                             "inferContentType": true
                                         }
-                                    },
-                                    "runAfter": {}
+                                    }
                                 },
                                 "Parse_Known_TaskIds": {
                                     "type": "ParseJson",
@@ -225,11 +833,11 @@
                                     },
                                     "runAfter": {
                                         "Get_blob_content": [
-                                            "SUCCEEDED"
+                                            "Succeeded"
                                         ]
                                     }
                                 },
-                                "Set_KnownTaskIds_from_Storage": {
+                                "Set_KnownTaskIds": {
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "KnownTaskIds",
@@ -237,14 +845,76 @@
                                     },
                                     "runAfter": {
                                         "Parse_Known_TaskIds": [
-                                            "SUCCEEDED"
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Set_BlobExists_True": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "BlobExists",
+                                        "value": true
+                                    },
+                                    "runAfter": {
+                                        "Set_KnownTaskIds": [
+                                            "Succeeded"
                                         ]
                                     }
                                 }
                             },
                             "runAfter": {
-                                "Initialize_AllCurrentTaskIds": [
-                                    "SUCCEEDED"
+                                "Check_Authentication": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Create_Blob_If_Missing": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('BlobExists')",
+                                            false
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Create_Empty_Blob": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": [],
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                                        "queries": {
+                                            "folderPath": "/intune-tasks",
+                                            "name": "known-task-ids.json",
+                                            "queryParametersSingleEncoded": true
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Try_Get_Known_TaskIds": [
+                                    "Succeeded",
+                                    "Failed"
                                 ]
                             }
                         },
@@ -253,15 +923,13 @@
                             "inputs": {
                                 "method": "GET",
                                 "uri": "https://graph.microsoft.com/beta/deviceManagement/administrativeTasks?$orderby=createdDateTime%20desc&$top=50",
-                                "authentication": {
-                                    "type": "ManagedServiceIdentity",
-                                    "audience": "https://graph.microsoft.com"
+                                "headers": {
+                                    "Authorization": "Bearer @{variables('AccessToken')}"
                                 }
                             },
                             "runAfter": {
-                                "Try_Get_Known_TaskIds": [
-                                    "SUCCEEDED",
-                                    "FAILED"
+                                "Create_Blob_If_Missing": [
+                                    "Succeeded"
                                 ]
                             }
                         },
@@ -303,7 +971,7 @@
                             },
                             "runAfter": {
                                 "HTTP_Get_Administrative_Tasks": [
-                                    "SUCCEEDED"
+                                    "Succeeded"
                                 ]
                             }
                         },
@@ -311,15 +979,14 @@
                             "type": "Foreach",
                             "foreach": "@body('Parse_Tasks_Response')?['value']",
                             "actions": {
-                                "Append_TaskId_to_AllCurrentTaskIds": {
+                                "Append_to_AllCurrentTaskIds": {
                                     "type": "AppendToArrayVariable",
                                     "inputs": {
                                         "name": "AllCurrentTaskIds",
                                         "value": "@items('For_each_Task')?['id']"
-                                    },
-                                    "runAfter": {}
+                                    }
                                 },
-                                "Check_if_Task_is_New": {
+                                "Check_if_New": {
                                     "type": "If",
                                     "expression": {
                                         "and": [
@@ -339,20 +1006,22 @@
                                             "inputs": {
                                                 "name": "NewTasks",
                                                 "value": "@items('For_each_Task')"
-                                            },
-                                            "runAfter": {}
+                                            }
                                         }
                                     },
+                                    "else": {
+                                        "actions": {}
+                                    },
                                     "runAfter": {
-                                        "Append_TaskId_to_AllCurrentTaskIds": [
-                                            "SUCCEEDED"
+                                        "Append_to_AllCurrentTaskIds": [
+                                            "Succeeded"
                                         ]
                                     }
                                 }
                             },
                             "runAfter": {
                                 "Parse_Tasks_Response": [
-                                    "SUCCEEDED"
+                                    "Succeeded"
                                 ]
                             }
                         },
@@ -373,7 +1042,7 @@
                                     "type": "Foreach",
                                     "foreach": "@variables('NewTasks')",
                                     "actions": {
-                                        "Post_message_in_a_chat_or_channel": {
+                                        "Post_Task_Notification": {
                                             "type": "ApiConnection",
                                             "inputs": {
                                                 "host": {
@@ -387,23 +1056,24 @@
                                                         "groupId": "@parameters('teamsGroupId')",
                                                         "channelId": "@parameters('teamsChannelId')"
                                                     },
-                                                    "messageBody": "<p><strong>New Intune Administrative Task</strong></p><p><strong>Name:</strong> @{items('For_each_New_Task')?['displayName']}</p><p><strong>Description:</strong> @{items('For_each_New_Task')?['description']}</p><p><strong>Category:</strong> @{items('For_each_New_Task')?['category']}</p><p><strong>Status:</strong> @{items('For_each_New_Task')?['status']}</p><p><strong>Created:</strong> @{items('For_each_New_Task')?['createdDateTime']}</p><p><strong>Task ID:</strong> @{items('For_each_New_Task')?['id']}</p>"
+                                                    "messageBody": "<p><strong>📋 New Intune Administrative Task</strong></p><p><strong>Name:</strong> @{items('For_each_New_Task')?['displayName']}</p><p><strong>Description:</strong> @{items('For_each_New_Task')?['description']}</p><p><strong>Category:</strong> @{items('For_each_New_Task')?['category']}</p><p><strong>Status:</strong> @{items('For_each_New_Task')?['status']}</p><p><strong>Created:</strong> @{items('For_each_New_Task')?['createdDateTime']}</p><p><strong>Task ID:</strong> @{items('For_each_New_Task')?['id']}</p>"
                                                 },
                                                 "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
-                                            },
-                                            "runAfter": {}
+                                            }
                                         }
-                                    },
-                                    "runAfter": {}
+                                    }
                                 }
+                            },
+                            "else": {
+                                "actions": {}
                             },
                             "runAfter": {
                                 "For_each_Task": [
-                                    "SUCCEEDED"
+                                    "Succeeded"
                                 ]
                             }
                         },
-                        "Create_or_Update_blob": {
+                        "Update_Known_TaskIds": {
                             "type": "ApiConnection",
                             "inputs": {
                                 "host": {
@@ -425,7 +1095,7 @@
                             },
                             "runAfter": {
                                 "Check_for_New_Tasks": [
-                                    "SUCCEEDED"
+                                    "Succeeded"
                                 ]
                             },
                             "runtimeConfiguration": {
@@ -449,10 +1119,35 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureblobConnectionName'))]",
                                 "connectionName": "[variables('azureblobConnectionName')]",
                                 "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'azureblob')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                                "connectionName": "[variables('keyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('location'), 'keyvault')]"
                             }
                         }
                     }
                 }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), parameters('logicAppName'), 'KeyVaultSecretsOfficer')]",
+            "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
             }
         }
     ],
@@ -461,17 +1156,25 @@
             "type": "string",
             "value": "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
         },
-        "logicAppManagedIdentityPrincipalId": {
+        "callbackLogicAppUrl": {
             "type": "string",
-            "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'full').identity.principalId]"
+            "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', variables('callbackLogicAppName'), 'manual'), '2019-05-01').value]"
+        },
+        "keyVaultName": {
+            "type": "string",
+            "value": "[variables('keyVaultName')]"
         },
         "storageAccountName": {
             "type": "string",
             "value": "[variables('storageAccountName')]"
         },
-        "requiredGraphPermissions": {
+        "appRegistrationId": {
             "type": "string",
-            "value": "DeviceManagementManagedDevices.Read.All - Required for reading administrative tasks from Intune"
+            "value": "[reference(resourceId('Microsoft.Resources/deploymentScripts', variables('createAppScriptName'))).outputs.appId]"
+        },
+        "postDeploymentSteps": {
+            "type": "string",
+            "value": "1. Grant admin consent for the App Registration in Entra ID > App registrations > API permissions > Grant admin consent. 2. Run the main Logic App - it will post a login link to Teams. 3. Click the login link and authenticate."
         }
     }
 }
