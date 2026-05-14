@@ -270,6 +270,14 @@
                                         "Exchange_Code_for_Token": [
                                             "Succeeded"
                                         ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
                                     }
                                 },
                                 "Store_Refresh_Token": {
@@ -290,6 +298,13 @@
                                         "Parse_Token_Response": [
                                             "Succeeded"
                                         ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
                                     }
                                 },
                                 "Success_Response": {
@@ -629,6 +644,14 @@ echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" 
                                 "Set_ClientId": [
                                     "Succeeded"
                                 ]
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
                             }
                         },
                         "Try_Get_Refresh_Token": {
@@ -645,7 +668,14 @@ echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" 
                                         "method": "get",
                                         "path": "/secrets/@{encodeURIComponent('intune-refresh-token')}/value"
                                     },
-                                    "runAfter": {}
+                                    "runAfter": {},
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
                                 },
                                 "Get_Access_Token": {
                                     "type": "Http",
@@ -691,6 +721,14 @@ echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" 
                                         "Get_Access_Token": [
                                             "Succeeded"
                                         ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
                                     }
                                 },
                                 "Update_Refresh_Token": {
@@ -711,6 +749,13 @@ echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" 
                                         "Parse_Token_Response": [
                                             "Succeeded"
                                         ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
                                     }
                                 },
                                 "Set_AccessToken": {
@@ -723,6 +768,14 @@ echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" 
                                         "Update_Refresh_Token": [
                                             "Succeeded"
                                         ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
                                     }
                                 },
                                 "Set_IsAuthenticated_True": {
@@ -931,6 +984,13 @@ echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" 
                                 "Create_Blob_If_Missing": [
                                     "Succeeded"
                                 ]
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
                             }
                         },
                         "Parse_Tasks_Response": {
