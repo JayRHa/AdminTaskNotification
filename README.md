@@ -1,9 +1,9 @@
 <!-- unified-readme:start -->
 <div align="center">
 
-# Admin Task Notification
+# Intune Administrative Tasks Monitor
 
-**Notification system for administrative tasks and alerts in endpoint management environments.**
+**Monitor Microsoft Intune administrative tasks and receive notifications in Microsoft Teams when new tasks are created.**
 
 Build. Automate. Share.
 
@@ -20,7 +20,7 @@ Build. Automate. Share.
 
 ## What is this?
 
-Admin Task Notification helps endpoint administrators surface actions, alerts, or helper workflows closer to the device or admin process.
+Intune Administrative Tasks Monitor helps endpoint administrators surface actions, alerts, or helper workflows closer to the device or admin process.
 
 ## Project Context
 
@@ -50,19 +50,10 @@ flowchart LR
    git clone https://github.com/JayRHa/AdminTaskNotification.git
    ```
 
-3. Continue with the project-specific documentation in the next section.
+3. Continue with the setup, usage, or workflow sections below.
 
 ---
 <!-- unified-readme:end -->
-
-<!-- project-documentation:start -->
-## Project Documentation
-
-The sections below contain the repository-specific setup, usage, and reference material for this project.
-
-# Intune Administrative Tasks Monitor
-
-Monitor Microsoft Intune administrative tasks and receive notifications in Microsoft Teams when new tasks are created.
 
 ## Overview
 
