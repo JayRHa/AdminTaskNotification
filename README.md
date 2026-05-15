@@ -1,3 +1,48 @@
+<!-- unified-readme:start -->
+    <div align="center">
+
+    # Admin Task Notification
+
+    **Notification system for administrative tasks and alerts in endpoint management environments.**
+
+    Build. Automate. Share.
+
+    [![GitHub stars](https://img.shields.io/github/stars/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=f4c542)](https://github.com/JayRHa/AdminTaskNotification/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=4078c0)](https://github.com/JayRHa/AdminTaskNotification/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=d73a4a)](https://github.com/JayRHa/AdminTaskNotification/issues)
+[![Contributors](https://img.shields.io/github/contributors/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=28a745)](https://github.com/JayRHa/AdminTaskNotification/graphs/contributors)
+
+    ---
+
+    `Endpoint Management` | `Admin Tools` | `Public` | `Maintained`
+
+    </div>
+
+    ## What is this?
+
+    This repository contains notification system for administrative tasks and alerts in endpoint management environments.
+
+    > Browse the documentation below for setup notes, usage details, and project-specific context.
+
+    ---
+
+    ## Quick Start
+
+    1. Review the project documentation below.
+2. Clone the repository:
+
+   ```bash
+   git clone https://github.com/JayRHa/AdminTaskNotification.git
+   ```
+
+3. Follow the setup, deployment, or usage notes in the preserved documentation section.
+
+    ---
+    <!-- unified-readme:end -->
+
+
+## Existing Documentation
+
 # Intune Administrative Tasks Monitor
 
 Monitor Microsoft Intune administrative tasks and receive notifications in Microsoft Teams when new tasks are created.
