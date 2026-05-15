@@ -20,7 +20,7 @@ Build. Automate. Share.
 
 ## What is this?
 
-This repository provides notification system for administrative tasks and alerts in endpoint management environments.
+Notification system for administrative tasks and alerts in endpoint management environments.
 
 > Browse the documentation below for setup notes, usage details, and project-specific context.
 
