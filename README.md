@@ -12,6 +12,12 @@ Build. Automate. Share.
 [![GitHub issues](https://img.shields.io/github/issues/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=d73a4a)](https://github.com/JayRHa/AdminTaskNotification/issues)
 [![Contributors](https://img.shields.io/github/contributors/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=28a745)](https://github.com/JayRHa/AdminTaskNotification/graphs/contributors)
 
+<p>
+  <a href="https://jannikreinhard.com/">Blog</a> ·
+  <a href="https://www.linkedin.com/in/jannik-r/">LinkedIn</a> ·
+  <a href="https://x.com/jannik_reinhard">X</a>
+</p>
+
 ---
 
 `Endpoint Helper` | `Admin Tools` | `Public` | `Maintained`
