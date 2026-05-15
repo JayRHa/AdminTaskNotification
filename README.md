@@ -1,18 +1,3 @@
-<!-- repo-standard:start -->
-# Admin Task Notification
-
-Notification system for administrative tasks and alerts in endpoint management environments.
-
-| Area | Stack | Visibility |
-| --- | --- | --- |
-| Endpoint Management | PowerShell | Public |
-
-**Repository:** `JayRHa/admin-task-notification`  
-**Topics:** `admin-tools`, `notifications`, `powershell`, `endpoint-management`, `microsoft-intune`
-<!-- repo-standard:end -->
-
----
-
 # Intune Administrative Tasks Monitor
 
 Monitor Microsoft Intune administrative tasks and receive notifications in Microsoft Teams when new tasks are created.
