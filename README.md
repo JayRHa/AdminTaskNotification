@@ -1,34 +1,34 @@
 <!-- unified-readme:start -->
-    <div align="center">
+<div align="center">
 
-    # Admin Task Notification
+# Admin Task Notification
 
-    **Notification system for administrative tasks and alerts in endpoint management environments.**
+**Notification system for administrative tasks and alerts in endpoint management environments.**
 
-    Build. Automate. Share.
+Build. Automate. Share.
 
-    [![GitHub stars](https://img.shields.io/github/stars/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=f4c542)](https://github.com/JayRHa/AdminTaskNotification/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=f4c542)](https://github.com/JayRHa/AdminTaskNotification/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=4078c0)](https://github.com/JayRHa/AdminTaskNotification/network/members)
 [![GitHub issues](https://img.shields.io/github/issues/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=d73a4a)](https://github.com/JayRHa/AdminTaskNotification/issues)
 [![Contributors](https://img.shields.io/github/contributors/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=28a745)](https://github.com/JayRHa/AdminTaskNotification/graphs/contributors)
 
-    ---
+---
 
-    `Endpoint Management` | `Admin Tools` | `Public` | `Maintained`
+`Endpoint Management` | `Admin Tools` | `Public` | `Maintained`
 
-    </div>
+</div>
 
-    ## What is this?
+## What is this?
 
-    This repository contains notification system for administrative tasks and alerts in endpoint management environments.
+This repository provides notification system for administrative tasks and alerts in endpoint management environments.
 
-    > Browse the documentation below for setup notes, usage details, and project-specific context.
+> Browse the documentation below for setup notes, usage details, and project-specific context.
 
-    ---
+---
 
-    ## Quick Start
+## Quick Start
 
-    1. Review the project documentation below.
+1. Review the project documentation below.
 2. Clone the repository:
 
    ```bash
@@ -37,9 +37,8 @@
 
 3. Follow the setup, deployment, or usage notes in the preserved documentation section.
 
-    ---
-    <!-- unified-readme:end -->
-
+---
+<!-- unified-readme:end -->
 
 ## Existing Documentation
 
