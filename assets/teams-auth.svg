@@ -1,0 +1,9 @@
+<svg width="1100" height="360" viewBox="0 0 1100 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Teams Connection Authorization</title>
+  <desc id="desc">The deployed Teams API connection must be authorized before messages can be posted.</desc>
+  <rect width="1100" height="360" rx="24" fill="#0f172a"/>
+  <rect x="28" y="28" width="1044" height="304" rx="18" fill="#111827" stroke="#334155"/>
+  <text x="60" y="82" font-family="Segoe UI, Arial" font-size="34" font-weight="700" fill="#f8fafc">Teams Connection Authorization</text>
+  <text x="60" y="118" font-family="Segoe UI, Arial" font-size="19" fill="#cbd5e1">The deployed Teams API connection must be authorized before messages can be posted.</text>
+  <text x="60" y="155" font-family="Segoe UI, Arial" font-size="18" fill="#e5e7eb">- Open the Teams API connection in Azure</text><text x="60" y="189" font-family="Segoe UI, Arial" font-size="18" fill="#e5e7eb">- Authorize with the correct Microsoft 365 account</text><text x="60" y="223" font-family="Segoe UI, Arial" font-size="18" fill="#e5e7eb">- Save the connection before testing the Logic App</text>
+</svg>

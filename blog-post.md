@@ -10,7 +10,7 @@ The solution consists of the following components:
 - **Azure Storage Account**: Stores known task IDs to avoid duplicate notifications
 - **Microsoft Teams**: Receives notifications about new Administrative Tasks
 
-![Architecture](./images/architecture.png)
+![Architecture](assets/architecture.svg)
 
 ## Prerequisites
 
@@ -69,7 +69,7 @@ After deployment, the Teams API connection must be manually authorized:
 6. Sign in with your Microsoft 365 account
 7. Click **"Save"**
 
-![Teams Authorization](./images/teams-auth.png)
+![Teams Authorization](assets/teams-auth.svg)
 
 ## Step 4: Grant Graph API Permissions
 
@@ -132,7 +132,7 @@ On the first run, all current Administrative Tasks are stored as "known". From t
 
 When a new Administrative Task is created in Intune, you'll receive a notification in your Teams channel:
 
-![Teams Notification](./images/teams-notification.png)
+![Teams Notification](assets/teams-notification.svg)
 
 The message contains:
 - Task name
