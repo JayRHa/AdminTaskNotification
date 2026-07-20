@@ -1,65 +1,20 @@
-<!-- unified-readme:start -->
+<!-- jr-brand:start -->
 <div align="center">
-
-# Intune Administrative Tasks Monitor
-
-**Monitor Microsoft Intune administrative tasks and receive notifications in Microsoft Teams when new tasks are created.**
-
-Build. Automate. Share.
-
-[![GitHub stars](https://img.shields.io/github/stars/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=f4c542)](https://github.com/JayRHa/AdminTaskNotification/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=4078c0)](https://github.com/JayRHa/AdminTaskNotification/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=d73a4a)](https://github.com/JayRHa/AdminTaskNotification/issues)
-[![Contributors](https://img.shields.io/github/contributors/JayRHa/AdminTaskNotification?style=for-the-badge&logo=github&color=28a745)](https://github.com/JayRHa/AdminTaskNotification/graphs/contributors)
-
-<p>
-  <a href="https://jannikreinhard.com/">Blog</a> ·
-  <a href="https://www.linkedin.com/in/jannik-r/">LinkedIn</a> ·
-  <a href="https://x.com/jannik_reinhard">X</a>
+  <a href="https://jannikreinhard.com/">
+    <img src="https://raw.githubusercontent.com/JayRHa/.github/main/assets/readme/tool.svg" alt="Jannik Reinhard — AI, Cloud and Endpoint Management" width="100%">
+  </a>
+  <h1>Admin Task Notification</h1>
+  <p><strong>Notification system for administrative tasks and alerts in endpoint management environments.</strong></p>
+  <p>
+  <a href="https://jannikreinhard.com/"><img src="https://img.shields.io/badge/Website-0A5FC0?style=flat-square&amp;logo=wordpress&amp;logoColor=white" alt="Website"></a>
+  <a href="https://github.com/JayRHa"><img src="https://img.shields.io/badge/GitHub-081427?style=flat-square&amp;logo=github&amp;logoColor=white" alt="GitHub"></a>
+  <a href="https://www.linkedin.com/in/jannik-r/"><img src="https://img.shields.io/badge/LinkedIn-0795FF?style=flat-square&amp;logo=linkedin&amp;logoColor=white" alt="LinkedIn"></a>
+  <a href="https://x.com/jannik_reinhard"><img src="https://img.shields.io/badge/X-081427?style=flat-square&amp;logo=x&amp;logoColor=white" alt="X"></a>
+  <a href="https://www.youtube.com/@ModernDevMgmt/featured"><img src="https://img.shields.io/badge/YouTube-0A5FC0?style=flat-square&amp;logo=youtube&amp;logoColor=white" alt="YouTube"></a>
 </p>
-
----
-
-`Endpoint Helper` | `Admin Tools` | `Public` | `Maintained`
-
+  <p><sub>Tool · App · CLI · Documentation · Practical by design</sub></p>
 </div>
-
-## What is this?
-
-Intune Administrative Tasks Monitor helps endpoint administrators surface actions, alerts, or helper workflows closer to the device or admin process.
-
-## Project Context
-
-- Use it when endpoint state should trigger a visible notification, shortcut, or admin action.
-- The project bridges local device context with management workflows.
-- This repository is maintained as a practical project and reference asset.
-
-## How It Works
-
-Device or admin signals are collected, evaluated against the workflow logic, then surfaced as notifications, tray actions, or follow-up tasks.
-
-```mermaid
-flowchart LR
-    Signal[Device or admin signal] --> Logic[Workflow logic]
-    Logic --> Action[Notification or quick action]
-    Action --> Admin[Admin or user]
-    Admin --> FollowUp[Follow-up action]
-    FollowUp --> Signal
-```
-
-## Quick Start
-
-1. Review the project context and workflow below.
-2. Clone the repository:
-
-   ```bash
-   git clone https://github.com/JayRHa/AdminTaskNotification.git
-   ```
-
-3. Continue with the setup, usage, or workflow sections below.
-
----
-<!-- unified-readme:end -->
+<!-- jr-brand:end -->
 
 ## Overview
 
@@ -168,3 +123,15 @@ Alternatively, use Graph Explorer or PowerShell to retrieve the IDs.
 ## License
 
 MIT License
+
+<!-- jr-brand-footer:start -->
+
+---
+
+<div align="center">
+  <p><sub>Built and maintained by <a href="https://jannikreinhard.com/">Jannik Reinhard</a> · Microsoft MVP for Security and AI Platform.</sub></p>
+  <p><a href="https://www.buymeacoffee.com/jannikreinf">Support the open-source work</a></p>
+  <p><strong>Stay healthy, Cheers Jannik</strong></p>
+</div>
+
+<!-- jr-brand-footer:end -->
