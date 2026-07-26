@@ -1,0 +1,24 @@
+name: Validate ARM templates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate template JSON
+        run: |
+          python -m json.tool azuredeploy.json > /dev/null
+          python -m json.tool azuredeploy.parameters.json > /dev/null
+      - name: Validate embedded deployment script syntax
+        run: |
+          python -c 'import json; template=json.load(open("azuredeploy.json")); print(next(resource for resource in template["resources"] if resource["type"] == "Microsoft.Resources/deploymentScripts")["properties"]["scriptContent"])' > /tmp/deployment-script.sh
+          bash -n /tmp/deployment-script.sh

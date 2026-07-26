@@ -76,7 +76,7 @@
             "apiVersion": "2023-01-01",
             "name": "[concat(variables('storageAccountName'), '/default')]",
             "dependsOn": [
-                "[variables('storageAccountId')]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {}
         },
@@ -125,7 +125,7 @@
             "name": "[variables('azureblobConnectionName')]",
             "location": "[variables('location')]",
             "dependsOn": [
-                "[variables('storageAccountId')]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {
                 "displayName": "Azure Blob Storage Connection",
@@ -410,59 +410,7 @@
                         "value": "[variables('keyVaultName')]"
                     }
                 ],
-                "scriptContent": "
-#!/bin/bash
-set -e
-
-# Login with managed identity
-az login --identity
-
-# Check if app already exists
-EXISTING_APP=$(az ad app list --display-name \"$APP_DISPLAY_NAME\" --query \"[0].appId\" -o tsv 2>/dev/null || echo \"\")
-
-if [ -n \"$EXISTING_APP\" ] && [ \"$EXISTING_APP\" != \"None\" ]; then
-    echo \"App already exists with ID: $EXISTING_APP\"
-    APP_ID=$EXISTING_APP
-
-    # Update redirect URI
-    az ad app update --id $APP_ID --web-redirect-uris \"$REDIRECT_URI\"
-
-    # Create new secret
-    SECRET_RESULT=$(az ad app credential reset --id $APP_ID --display-name \"intune-monitor-secret\" --years 2 --query password -o tsv)
-else
-    # Create App Registration with required permissions
-    APP_RESULT=$(az ad app create \\
-        --display-name \"$APP_DISPLAY_NAME\" \\
-        --web-redirect-uris \"$REDIRECT_URI\" \\
-        --required-resource-accesses '[{
-            \"resourceAppId\": \"00000003-0000-0000-c000-000000000000\",
-            \"resourceAccess\": [
-                {\"id\": \"314874da-47d6-4978-88dc-cf0d37f0571a\", \"type\": \"Scope\"},
-                {\"id\": \"7427e0e9-2fba-42fe-b0c0-848c9e6a8182\", \"type\": \"Scope\"}
-            ]
-        }]' \\
-        --query appId -o tsv)
-
-    APP_ID=$APP_RESULT
-    echo \"Created App Registration with ID: $APP_ID\"
-
-    # Create client secret
-    SECRET_RESULT=$(az ad app credential reset --id $APP_ID --display-name \"intune-monitor-secret\" --years 2 --query password -o tsv)
-
-    # Create service principal
-    az ad sp create --id $APP_ID || true
-fi
-
-# Get tenant ID
-TENANT_ID=$(az account show --query tenantId -o tsv)
-
-# Store secrets in Key Vault
-az keyvault secret set --vault-name $KEY_VAULT_NAME --name \"app-client-id\" --value \"$APP_ID\"
-az keyvault secret set --vault-name $KEY_VAULT_NAME --name \"app-client-secret\" --value \"$SECRET_RESULT\"
-
-# Output for ARM template
-echo \"{\\\"appId\\\": \\\"$APP_ID\\\", \\\"tenantId\\\": \\\"$TENANT_ID\\\"}\" > $AZ_SCRIPTS_OUTPUT_PATH
-"
+                "scriptContent": "#!/bin/bash\nset -euo pipefail\n\n# Azure deployment scripts authenticate the configured managed identity before execution.\nEXISTING_APP=$(az ad app list --display-name \"$APP_DISPLAY_NAME\" --query \"[0].appId\" -o tsv 2>/dev/null || true)\n\nif [ -n \"$EXISTING_APP\" ] && [ \"$EXISTING_APP\" != \"None\" ]; then\n    echo \"App already exists with ID: $EXISTING_APP\"\n    APP_ID=\"$EXISTING_APP\"\n    az ad app update --id \"$APP_ID\" --web-redirect-uris \"$REDIRECT_URI\"\nelse\n    APP_ID=$(az ad app create \\\n        --display-name \"$APP_DISPLAY_NAME\" \\\n        --web-redirect-uris \"$REDIRECT_URI\" \\\n        --required-resource-accesses '[{\"resourceAppId\":\"00000003-0000-0000-c000-000000000000\",\"resourceAccess\":[{\"id\":\"314874da-47d6-4978-88dc-cf0d37f0571a\",\"type\":\"Scope\"},{\"id\":\"7427e0e9-2fba-42fe-b0c0-848c9e6a8182\",\"type\":\"Scope\"}]}]' \\\n        --query appId -o tsv)\n    echo \"Created App Registration with ID: $APP_ID\"\n    az ad sp create --id \"$APP_ID\" >/dev/null 2>&1 || true\nfi\n\nSECRET_RESULT=$(az ad app credential reset --id \"$APP_ID\" --display-name \"intune-monitor-secret\" --years 2 --query password -o tsv)\nTENANT_ID=$(az account show --query tenantId -o tsv)\n\naz keyvault secret set --vault-name \"$KEY_VAULT_NAME\" --name \"app-client-id\" --value \"$APP_ID\" >/dev/null\naz keyvault secret set --vault-name \"$KEY_VAULT_NAME\" --name \"app-client-secret\" --value \"$SECRET_RESULT\" >/dev/null\n\nprintf '{\"appId\":\"%s\",\"tenantId\":\"%s\"}' \"$APP_ID\" \"$TENANT_ID\" > \"$AZ_SCRIPTS_OUTPUT_PATH\"\n"
             }
         },
         {
